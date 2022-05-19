@@ -57,11 +57,11 @@ arron_temp_data = temp_data %>%
     TEMPERATURE_MAX = as.numeric(TEMPERATURE_MAX),
     TEMPERATURE_MIN = as.numeric(TEMPERATURE_MIN),
     TEMPERATURE_AVG = as.numeric(TEMPERATURE_AVG)
-    ) %>% 
+  ) %>% 
   filter(date >= ymd("2000-01-01")) %>% 
   select(date, Nom_arrondissement, NIS_CODE, GRID_NO, TEMPERATURE_MAX, TEMPERATURE_MIN, TEMPERATURE_AVG) %>% 
   arrange(date, NIS_CODE)
-  
+
 
 
 
@@ -69,22 +69,26 @@ temp_percetiles_year_arron = arron_temp_data %>%
   mutate(YEAR = year(date)) %>% 
   group_by(YEAR, NIS_CODE, Nom_arrondissement) %>% 
   summarize(
+    temp_95_percentile = quantile(TEMPERATURE_MAX, .95),
     temp_97_percentile = quantile(TEMPERATURE_MAX, .97),
     temp_98_percentile = quantile(TEMPERATURE_MAX, .98),
     temp_99_percentile = quantile(TEMPERATURE_MAX, .99)
-    )
+  )
 
 
 
 
 heat_wave_day_def = arron_temp_data %>% 
+  arrange(Nom_arrondissement, NIS_CODE, date) %>%  
+  group_by(Nom_arrondissement, NIS_CODE) %>% 
+  mutate(
+    MAX_TEMP_day_plus_1 = lead(TEMPERATURE_MAX, n = 1),
+    MAX_TEMP_day_plus_2 = lead(TEMPERATURE_MAX, n = 2),
+    MAX_TEMP_day_plus_3 = lead(TEMPERATURE_MAX, n = 3),
+    MAX_TEMP_day_plus_4 = lead(TEMPERATURE_MAX, n = 4)) %>% 
   mutate(YEAR = year(date)) %>% 
   left_join(temp_percetiles_year_arron %>% 
-              select(YEAR, NIS_CODE, Nom_arrondissement, temp_heat_wave_threshold = temp_99_percentile)) %>% 
-  mutate(MAX_TEMP_day_plus_1 = lead(TEMPERATURE_MAX, n = 1),
-         MAX_TEMP_day_plus_2 = lead(TEMPERATURE_MAX, n = 2),
-         MAX_TEMP_day_plus_3 = lead(TEMPERATURE_MAX, n = 3),
-         MAX_TEMP_day_plus_4 = lead(TEMPERATURE_MAX, n = 4)) %>% 
+              select(YEAR, NIS_CODE, Nom_arrondissement, temp_heat_wave_threshold = temp_95_percentile)) %>% 
   mutate(heat_wave = ifelse(
     TEMPERATURE_MAX >= temp_heat_wave_threshold &
       MAX_TEMP_day_plus_1 >= temp_heat_wave_threshold & 
@@ -108,14 +112,13 @@ mortality_heat_wave = heat_wave_week %>%
   mutate(YEAR_WEEK = paste0(YEAR, "-", sprintf("%03s", isoweek))) %>% 
   select(YEAR_WEEK, NIS_CODE, Nom_arrondissement, heat_wave_week) %>% 
   inner_join(
-    mortality_data %>% 
-      filter(COD == "natural"),
+    mortality_data,
     by = c("NIS_CODE" = "ARRON", "YEAR_WEEK" = "YEAR_WEEK")
   ) %>% 
-  select(YEAR, YEAR_WEEK, NIS_CODE, Nom_arrondissement,  n_deaths = N_MASK, heat_wave_week,)
+  select(YEAR, YEAR_WEEK, NIS_CODE, Nom_arrondissement, COD, n_deaths = N_MASK, heat_wave_week)
 
 
-write_csv(mortality_heat_wave, file = here("out/mortality_heat_wave.csv"))
+write_csv(mortality_heat_wave, file = here("out/mortality_heat_wave_R.csv"))
 
 
 # arron_temp_data %>% 
