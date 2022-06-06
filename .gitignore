@@ -2,5 +2,5 @@ out/*
 *.DS_Store
 .here
 .Rhistory
-
+*.ipynb_checkpoints
 
